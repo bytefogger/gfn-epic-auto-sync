@@ -1,3 +1,5 @@
+let gameTitles = []
+
 let stopFlag = false;
 
 document.addEventListener("keydown", (e) => {
@@ -132,3 +134,5 @@ let gfn = {
     }, 2000);
   }
 };
+
+gfn.run()
