@@ -28,7 +28,6 @@ This project automates the process of syncing your **Epic Games Store library** 
    - Auto-click **"Show More"**
    - Extract all purchased game titles
    - Print a list of game titles in the console under `epicGames.gameTitles`
-   - Automatically open the GeForce NOW site
 
 > 📋 Copy the printed array from the console (you’ll use it in the next step).
 
