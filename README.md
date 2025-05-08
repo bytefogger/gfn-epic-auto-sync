@@ -1,6 +1,6 @@
 # 🎮 GeForce NOW Epic Games Auto-Sync
 
-This project automates the process of syncing your **Epic Games Store library** with your **GeForce NOW** account by tagging each game as "Owned".
+This project automates the process of syncing your **Epic Games Store library** with your **GeForce NOW** account.
 
 ---
 
