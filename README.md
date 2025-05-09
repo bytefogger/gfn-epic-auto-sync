@@ -33,7 +33,26 @@ This project automates the process of syncing your **Epic Games Store library** 
 
 ---
 
-### Step 2: Run GeForce NOW Auto-Tagging
+### Step 2: Extract Amazon Prime Gaming Titles
+
+1. **Open the following page** in your browser:  
+   https://gaming.amazon.com/my-collection?offerType=games
+
+2. **Open Developer Tools**:  
+   Press `F12` (or `Ctrl+Shift+I` / `Cmd+Opt+I` on Mac) and switch to the **Console** tab.
+
+3. **Paste and run** the contents of the `amazonPrime.js` script into the console.
+
+4. The script will automatically:
+   - Click all **"Show More" / "Load More"** buttons
+   - Navigate through all **paginated pages**
+   - Extract the titles of all **redeemed games**
+
+> 📋 Copy the printed array from the console (you’ll use it in the next step).
+
+---
+
+### Step 3: Run GeForce NOW Auto-Tagging
 
 1. Go to the tab opened by the previous script, or manually open:  
    https://play.geforcenow.com/
