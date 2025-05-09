@@ -1,5 +1,10 @@
 let gameTitles = []; // Fill this in before running
-let stopFlag = false;
+
+let SEARCH_DELAY = 1500; //
+let TILE_DELAY = 1000; // Adjust as needed
+let CONFIRM_DELAY = 2000; //
+
+let stopFlag = false; // reset to rerun
 
 const syncedGames = [];
 const skippedGames = [];
@@ -48,7 +53,7 @@ let gfn = {
     this.searchInput.dispatchEvent(new Event("input", { bubbles: true }));
     this.searchInput.click();
 
-    setTimeout(() => this.openFirstTile(title), 2000);
+    setTimeout(() => this.openFirstTile(title), SEARCH_DELAY);
   },
 
   openFirstTile(title) {
@@ -61,12 +66,12 @@ let gfn = {
     if (!tile) {
       console.warn(`⚠️ Game tile not found for: ${title}`);
       skippedGames.push(title);
-      return setTimeout(() => this.searchNext(), 2000);
+      return setTimeout(() => this.searchNext(), TILE_DELAY);
     }
 
     tile.click();
     console.log(`📂 Opening tile for: ${title}`);
-    setTimeout(() => this.clickEpicTagAndAdd(), 2000);
+    setTimeout(() => this.clickEpicTagAndAdd(), TILE_DELAY);
   },
 
   clickEpicTagAndAdd() {
@@ -75,6 +80,16 @@ let gfn = {
 
     setTimeout(() => {
       if (stopFlag) return;
+
+      const storeSection = document.querySelector(
+        "body > gfn-root > gfn-back-to-exit-app > gfn-main-content > div > div > gfn-navigation > gfn-desktop-navigation > div > gfn-sidebar > mat-drawer-container > mat-drawer-content > div > div > gfn-game-section-grid > div > div:nth-child(3) > mat-sidenav-container > mat-sidenav-content > div > cdk-virtual-scroll-viewport > div.cdk-virtual-scroll-content-wrapper > div > div:nth-child(1) > gfn-games-grid-row > div > div.game-detail-host-container > gfn-game-detail-component > gfn-evidence-panel-tile > div > div.evidence-panel-description-row"
+      );
+
+      if (!storeSection || !storeSection.textContent?.toLowerCase().includes("epic games store")) {
+        console.warn("🚫 Epic Games Store not found in store section. Skipping.");
+        skippedGames.push(expectedTitle);
+        return setTimeout(() => this.searchNext(), SEARCH_DELAY);
+      }
 
       const titleElement = document.querySelector(
         "body > gfn-root > gfn-back-to-exit-app > gfn-main-content > div > div > gfn-navigation > gfn-desktop-navigation > div > gfn-sidebar > mat-drawer-container > mat-drawer-content > div > div > gfn-game-section-grid > div > div:nth-child(3) > mat-sidenav-container > mat-sidenav-content > div > cdk-virtual-scroll-viewport > div.cdk-virtual-scroll-content-wrapper > div > div:nth-child(1) > gfn-games-grid-row > div > div.game-detail-host-container > gfn-game-detail-component > gfn-evidence-panel-tile > div > div"
@@ -86,25 +101,17 @@ let gfn = {
       if (!actualTitle) {
         console.warn("❌ Game title not found on detail page");
         skippedGames.push(expectedTitle);
-        return setTimeout(() => this.searchNext(), 2000);
+        return setTimeout(() => this.searchNext(), SEARCH_DELAY);
       }
 
       if (normalize(actualTitle) !== normalize(expectedTitle)) {
         console.warn(`⛔ Title mismatch: "${actualTitle}" vs expected "${expectedTitle}"`);
         nameMismatches.push({ expected: expectedTitle, found: actualTitle });
         skippedGames.push(expectedTitle);
-        return setTimeout(() => this.searchNext(), 2000);
+        return setTimeout(() => this.searchNext(), SEARCH_DELAY);
       }
 
-      const storeSection = document.querySelector(
-        "body > gfn-root > gfn-back-to-exit-app > gfn-main-content > div > div > gfn-navigation > gfn-desktop-navigation > div > gfn-sidebar > mat-drawer-container > mat-drawer-content > div > div > gfn-game-section-grid > div > div:nth-child(3) > mat-sidenav-container > mat-sidenav-content > div > cdk-virtual-scroll-viewport > div.cdk-virtual-scroll-content-wrapper > div > div:nth-child(1) > gfn-games-grid-row > div > div.game-detail-host-container > gfn-game-detail-component > gfn-evidence-panel-tile > div > div.evidence-panel-description-row"
-      );
-
-      if (!storeSection || !storeSection.textContent?.toLowerCase().includes("epic games store")) {
-        console.warn("🚫 Epic Games Store not found in store section. Skipping.");
-        skippedGames.push(expectedTitle);
-        return setTimeout(() => this.searchNext(), 2000);
-      }
+      
 
       const chipList = storeSection.querySelector("mat-chip-list");
       const chips = chipList?.querySelectorAll("mat-chip") || [];
@@ -131,14 +138,14 @@ let gfn = {
             console.warn("❌ Confirm button not found");
             skippedGames.push(expectedTitle);
           }
-          setTimeout(() => this.searchNext(), 2000);
-        }, 2000);
+          setTimeout(() => this.searchNext(), CONFIRM_DELAY);
+        }, CONFIRM_DELAY);
       } else {
         console.log("ℹ️ Add button not found or already added");
         syncedGames.push(expectedTitle);
-        setTimeout(() => this.searchNext(), 2000);
+        setTimeout(() => this.searchNext(), SEARCH_DELAY);
       }
-    }, 2000);
+    }, TILE_DELAY);
   },
 
   reportSummary() {
