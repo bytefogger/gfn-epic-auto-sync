@@ -171,7 +171,14 @@ let gfn = {
     const storeSection = document.querySelector(".evidence-panel-description-row");
     const hasEpicChip = storeSection?.textContent.toLowerCase().includes("epic games store");
 
-    if (!hasEpicChip) {
+    if (hasEpicChip) {
+       const epicChipEl = storeSection && Array.from(storeSection.querySelectorAll(".digital-store-chip"))
+        .find(c => /epic games store/i.test(c.textContent.trim()));
+      epicChipEl.click();
+      await new Promise(r => setTimeout(r, TILE_DELAY));
+      
+      
+    } else {
       console.warn(`[GFN] ⚠ "${title}" isn’t on Epic – switching store…`);
 
       // ➊ click the “more actions” (⋮) button
