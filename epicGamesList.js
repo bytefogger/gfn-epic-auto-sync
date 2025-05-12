@@ -62,8 +62,8 @@ const epicGames = {
 
   startAutoClick() {
     this.clickInterval = setInterval(() => {
-      const btn = document.querySelector('#payment-history-show-more-button');
-      if (btn) {
+      const btn = document.querySelector("#next-btn");
+      if (btn && !btn.disabled) {
         btn.click();
       } else {
         clearInterval(this.clickInterval);
