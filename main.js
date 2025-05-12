@@ -1,53 +1,87 @@
-let gameTitles = []; // Fill this in before running
+// ─── ➊ YOUR LIST ─────────────────────────────────────────────────────────
+let gameTitles = []; // ← fill this with your list of game titles
 
-let SEARCH_DELAY = 1500; //
-let TILE_DELAY = 1000; // Adjust as needed
-let CONFIRM_DELAY = 2000; //
+// ─── ➋ CONFIG ────────────────────────────────────────────────────────────
+let SEARCH_DELAY  = 1500;
+let TILE_DELAY    = 1000;
+let CONFIRM_DELAY = 2000;
 
-let stopFlag = false; // reset to rerun
-
-const syncedGames = [];
-const skippedGames = [];
+let stopFlag = false;
+const syncedGames    = [];
+const skippedGames   = [];
 const nameMismatches = [];
 
-document.addEventListener("keydown", (e) => {
+// Ctrl+C to cancel mid-run
+document.addEventListener("keydown", e => {
   if (e.ctrlKey && e.key.toLowerCase() === "c") {
     stopFlag = true;
-    console.warn("🛑 Ctrl+C detected. Halting script after current task...");
+    console.warn("[GFN] 🛑 Cancelled by user");
   }
 });
 
+// ─── ➌ XHR HOOK ──────────────────────────────────────────────────────────
+window.latestSearchResult = null;
+(function(open) {
+  XMLHttpRequest.prototype.open = function(method, url) {
+    this._url = url;
+    return open.apply(this, arguments);
+  };
+  const origSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.send = function(body) {
+    this.addEventListener("load", () => {
+      if (
+        this._url?.includes("games.geforce.com/graphql") &&
+        this.responseText.includes('"apps"')
+      ) {
+        try {
+          const json = JSON.parse(this.responseText);
+          window.latestSearchResult = json.data.apps.items;
+          console.log(
+            `[GFN] ← network result (${window.latestSearchResult.length} items)`
+          );
+        } catch {
+          console.warn("[GFN] ⚠️ Could not parse network response");
+        }
+      }
+    });
+    return origSend.apply(this, arguments);
+  };
+})(XMLHttpRequest.prototype.open);
+
+// ─── ➍ MAIN LOGIC ─────────────────────────────────────────────────────────
 let gfn = {
   total: 0,
   searchInput: null,
 
   async run() {
     this.total = gameTitles.length;
-    if (stopFlag || this.total === 0) return;
-
-    this.searchInput = document.querySelector(
-      "body > gfn-root > gfn-back-to-exit-app > gfn-main-content > div > div > gfn-navigation > gfn-desktop-navigation > div > gfn-toolbar > nv-app-bar > div > div:nth-child(3) > div > nv-search > div > div > div > div > input"
-    );
-
-    if (!this.searchInput) {
-      console.error("Search input not found");
+    if (!this.total) {
+      console.log("[GFN] No games to process.");
       return;
     }
 
+    this.searchInput = document.querySelector("input.search-input");
+    if (!this.searchInput) {
+      console.error("[GFN] ❌ Search input not found");
+      return;
+    }
+
+    console.log(`[GFN] Starting sync of ${this.total} game(s)…`);
     await this.searchNext();
   },
 
   async searchNext() {
     if (stopFlag) return;
-    if (gameTitles.length === 0) {
-      console.log("✅ All games processed.");
-      this.reportSummary();
-      return;
+
+    if (!gameTitles.length) {
+      console.log("[GFN] ✅ All done.");
+      return this.reportSummary();
     }
 
     const title = gameTitles.shift();
     this.currentTitle = title;
-    console.log(`🔍 Searching: ${title} (${this.total - gameTitles.length}/${this.total})`);
+    const count = this.total - gameTitles.length;
+    console.log(`[GFN] 🔍 [${count}/${this.total}] Searching "${title}"…`);
 
     this.searchInput.value = title;
     this.searchInput.dispatchEvent(new Event("input", { bubbles: true }));
@@ -59,101 +93,199 @@ let gfn = {
   openFirstTile(title) {
     if (stopFlag) return;
 
-    const tile = document.querySelector(
-      "body > gfn-root > gfn-back-to-exit-app > gfn-main-content > div > div > gfn-navigation > gfn-desktop-navigation > div > gfn-sidebar > mat-drawer-container > mat-drawer-content > div > div > gfn-game-section-grid > div > div:nth-child(3) > mat-sidenav-container > mat-sidenav-content > div > cdk-virtual-scroll-viewport > div.cdk-virtual-scroll-content-wrapper > div > div:nth-child(1) > gfn-games-grid-row > div > div.game-tile-container-shell > div:nth-child(1) > gfn-game-tile > div > div > div.crimson.constants-position-relative > div > img"
-    );
+    const items = window.latestSearchResult || [];
+    const norm = s => s.toLowerCase().replace(/[^\w\s]/g, "").trim();
 
-    if (!tile) {
-      console.warn(`⚠️ Game tile not found for: ${title}`);
-      skippedGames.push(title);
-      return setTimeout(() => this.searchNext(), TILE_DELAY);
+    // ➊ exact-match with available Epic variant
+    let match = items.find(i =>
+      norm(i.title) === norm(title) &&
+      i.variants.some(v => v.appStore === "EPIC")
+    );
+    let usedMatch = match;
+
+    // ➋ fallback to first item if it’s NOT_OWNED on Epic
+    if (!match) {
+      const first = items[0];
+      const epicFirst = first?.variants.find(v => v.appStore === "EPIC");
+      if (first && epicFirst?.gfn.library.status === "NOT_OWNED") {
+        nameMismatches.push({ expected: title, found: first.title });
+        usedMatch = first;
+        console.warn(
+          `[GFN] ⚠ Name mismatch: expected "${title}", using "${first.title}"`
+        );
+      } else {
+        console.warn(
+          `[GFN] ❌ "${title}" not in network result and no valid fallback`
+        );
+        skippedGames.push(title);
+        return this.searchNext();
+      }
     }
 
-    tile.click();
-    console.log(`📂 Opening tile for: ${title}`);
+    // ➌ inspect Epic status
+    const epicVariant = usedMatch.variants.find(v => v.appStore === "EPIC");
+    const status = epicVariant?.gfn.library.status;
+    console.log(`[GFN] 🎮 "${usedMatch.title}" → Epic status: ${status}`);
+
+    // ➍ skip UI if already owned/synced
+    if (status !== "NOT_OWNED") {
+      console.log(`[GFN] ℹ️ "${usedMatch.title}" is already owned/synced`);
+      syncedGames.push(usedMatch.title);
+      return this.searchNext();
+    }
+
+    // ➎ click the matching DOM card by index
+    const idx = items.indexOf(usedMatch);
+    const cards = Array.from(document.querySelectorAll("gfn-game-tile"));
+    const card  = cards[idx];
+    if (!card) {
+      console.warn(
+        `[GFN] ❌ No DOM card at index ${idx} for "${usedMatch.title}"`
+      );
+      skippedGames.push(title);
+      return this.searchNext();
+    }
+
+    const clickTarget = card.childNodes[0]?.childNodes[0]?.childNodes[0];
+    if (!clickTarget) {
+      console.warn(`[GFN] ❌ Click target missing for "${usedMatch.title}"`);
+      skippedGames.push(title);
+      return this.searchNext();
+    }
+
+    clickTarget.click();
+    console.log(`[GFN] 📂 Opened tile for: "${usedMatch.title}"`);
     setTimeout(() => this.clickEpicTagAndAdd(), TILE_DELAY);
   },
 
   clickEpicTagAndAdd() {
     if (stopFlag) return;
-    const expectedTitle = this.currentTitle;
+    const title = this.currentTitle;
 
     setTimeout(() => {
       if (stopFlag) return;
 
       const storeSection = document.querySelector(
-        "body > gfn-root > gfn-back-to-exit-app > gfn-main-content > div > div > gfn-navigation > gfn-desktop-navigation > div > gfn-sidebar > mat-drawer-container > mat-drawer-content > div > div > gfn-game-section-grid > div > div:nth-child(3) > mat-sidenav-container > mat-sidenav-content > div > cdk-virtual-scroll-viewport > div.cdk-virtual-scroll-content-wrapper > div > div:nth-child(1) > gfn-games-grid-row > div > div.game-detail-host-container > gfn-game-detail-component > gfn-evidence-panel-tile > div > div.evidence-panel-description-row"
+        ".evidence-panel-description-row"
       );
+      const hasEpic = storeSection
+        ?.textContent
+        .toLowerCase()
+        .includes("epic games store");
 
-      if (!storeSection || !storeSection.textContent?.toLowerCase().includes("epic games store")) {
-        console.warn("🚫 Epic Games Store not found in store section. Skipping.");
-        skippedGames.push(expectedTitle);
-        return setTimeout(() => this.searchNext(), SEARCH_DELAY);
+      if (!hasEpic) {
+        console.warn(
+          `[GFN] 🚫 Epic Games Store not available for "${title}", switching store…`
+        );
+        return this.changeStoreToEpic();
       }
 
-      const titleElement = document.querySelector(
-        "body > gfn-root > gfn-back-to-exit-app > gfn-main-content > div > div > gfn-navigation > gfn-desktop-navigation > div > gfn-sidebar > mat-drawer-container > mat-drawer-content > div > div > gfn-game-section-grid > div > div:nth-child(3) > mat-sidenav-container > mat-sidenav-content > div > cdk-virtual-scroll-viewport > div.cdk-virtual-scroll-content-wrapper > div > div:nth-child(1) > gfn-games-grid-row > div > div.game-detail-host-container > gfn-game-detail-component > gfn-evidence-panel-tile > div > div"
+      console.log(`[GFN] ▶️ Found Epic chip for "${title}", proceeding to add`);
+      Array.from(storeSection.querySelectorAll("mat-chip"))
+        .find(c => c.textContent.toLowerCase().includes("epic games store"))
+        ?.click();
+
+      setTimeout(() => this.markAsOwned(), TILE_DELAY);
+    }, TILE_DELAY);
+  },
+
+  markAsOwned() {
+    const title = this.currentTitle;
+
+    const addBtn = Array.from(document.querySelectorAll("button"))
+      .find(b => b.textContent.toUpperCase().includes("MARK AS OWNED"));
+
+    if (!addBtn) {
+      console.log(
+        `[GFN] ℹ️ Already owned or no "MARK AS OWNED" for "${title}"`
       );
+      syncedGames.push(title);
+      return this.searchNext();
+    }
 
-      const actualTitle = titleElement?.textContent?.trim();
-      const normalize = str => str.toLowerCase().replace(/[^\w\s]/gi, '').trim();
+    addBtn.click();
+    console.log(`[GFN] 🟢 Clicked "MARK AS OWNED" for "${title}"`);
 
-      if (!actualTitle) {
-        console.warn("❌ Game title not found on detail page");
-        skippedGames.push(expectedTitle);
-        return setTimeout(() => this.searchNext(), SEARCH_DELAY);
-      }
-
-      if (normalize(actualTitle) !== normalize(expectedTitle)) {
-        console.warn(`⛔ Title mismatch: "${actualTitle}" vs expected "${expectedTitle}"`);
-        nameMismatches.push({ expected: expectedTitle, found: actualTitle });
-        skippedGames.push(expectedTitle);
-        return setTimeout(() => this.searchNext(), SEARCH_DELAY);
-      }
-
-      
-
-      const chipList = storeSection.querySelector("mat-chip-list");
-      const chips = chipList?.querySelectorAll("mat-chip") || [];
-      chips.forEach(chip => {
-        if (chip.textContent?.toLowerCase().includes("epic games store")) {
-          chip.click();
-        }
-      });
-
-      const addButton = document.querySelector(
-        "body > gfn-root > gfn-back-to-exit-app > gfn-main-content > div > div > gfn-navigation > gfn-desktop-navigation > div > gfn-sidebar > mat-drawer-container > mat-drawer-content > div > div > gfn-game-section-grid > div > div:nth-child(3) > mat-sidenav-container > mat-sidenav-content > div > cdk-virtual-scroll-viewport > div.cdk-virtual-scroll-content-wrapper > div > div:nth-child(1) > gfn-games-grid-row > div > div.game-detail-host-container > gfn-game-detail-component > gfn-evidence-panel-tile > div > div > div > div > button"
+    setTimeout(() => {
+      const confirmBtn = document.querySelector(
+        "button.mat-flat-button.mat-accent"
       );
-
-      if (addButton && addButton.textContent.includes("MARK AS OWNED")) {
-        addButton.click();
-
-        setTimeout(() => {
-          const confirmButton = document.querySelector("button.mat-flat-button.mat-accent");
-          if (confirmButton) {
-            confirmButton.click();
-            console.log(`✅ Synced (${syncedGames.length + 1}/${this.total}): ${expectedTitle}`);
-            syncedGames.push(expectedTitle);
-          } else {
-            console.warn("❌ Confirm button not found");
-            skippedGames.push(expectedTitle);
-          }
-          setTimeout(() => this.searchNext(), CONFIRM_DELAY);
-        }, CONFIRM_DELAY);
+      if (confirmBtn) {
+        confirmBtn.click();
+        console.log(`[GFN] ✅ Marked as owned: "${title}"`);
+        syncedGames.push(title);
       } else {
-        console.log("ℹ️ Add button not found or already added");
-        syncedGames.push(expectedTitle);
-        setTimeout(() => this.searchNext(), SEARCH_DELAY);
+        console.warn(`[GFN] ❌ Confirm dialog missing for "${title}"`);
+        skippedGames.push(title);
       }
+      setTimeout(() => this.searchNext(), CONFIRM_DELAY);
+    }, CONFIRM_DELAY);
+  },
+
+  changeStoreToEpic() {
+    const title = this.currentTitle;
+
+    // ① open the “⋮” menu
+    const menuBtn = document.querySelector(
+      'gfn-game-details-actions button.more-actions-button'
+    );
+    if (!menuBtn) {
+      console.warn(`[GFN] ❌ “More actions” button not found for "${title}"`);
+      return this.searchNext();
+    }
+    menuBtn.click();
+
+    setTimeout(() => {
+      // ② click “Change game store”
+      const panels = Array.from(
+        document.querySelectorAll("mat-menu-panel, div.mat-menu-panel")
+      );
+      const changeItem = panels[0]
+        ?.querySelectorAll("button")
+        && Array.from(panels[0].querySelectorAll("button"))
+             .find(b => b.textContent.trim().includes("Change game store"));
+
+      if (!changeItem) {
+        console.warn(
+          `[GFN] ❌ “Change game store” not found for "${title}"`
+        );
+        return this.searchNext();
+      }
+      changeItem.click();
+
+      setTimeout(() => {
+        // ③ click “Epic Games Store”
+        const panels2 = Array.from(
+          document.querySelectorAll("mat-menu-panel, div.mat-menu-panel")
+        );
+        const epicOption = panels2[1]
+          ?.querySelectorAll("button span")
+          && Array.from(panels2[1].querySelectorAll("button span"))
+               .find(span => span.textContent.trim() === "Epic Games Store");
+
+        if (!epicOption) {
+          console.warn(
+            `[GFN] ❌ “Epic Games Store” option not found for "${title}"`
+          );
+          return this.searchNext();
+        }
+        epicOption.click();
+        console.log(`[GFN] 🔄 Store switched to Epic for "${title}"`);
+
+        // ④ now retry the add flow
+        setTimeout(() => this.clickEpicTagAndAdd(), TILE_DELAY);
+      }, TILE_DELAY);
     }, TILE_DELAY);
   },
 
   reportSummary() {
-    console.log("\n✅ Finished syncing all games.\n");
-    console.log(`✔ Synced: ${syncedGames.length}`);
-    console.log(`⚠ Skipped: ${skippedGames.length}`);
-    console.log(`⛔ Name mismatches: ${nameMismatches.length}`);
-    if (nameMismatches.length > 0) console.table(nameMismatches);
+    console.log("\n[GFN] Summary:");
+    console.table({
+      Synced: syncedGames.length,
+      Skipped: skippedGames.length,
+      "Name mismatches": nameMismatches.length
+    });
+    if (nameMismatches.length) console.table(nameMismatches);
   }
 };
 
