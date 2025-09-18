@@ -195,7 +195,7 @@ let gfn = {
 
       // ➋ click “Change game store”
       await new Promise(r => setTimeout(r, 300));
-      const changeItem = Array.from(document.querySelectorAll("button.mat-menu-item"))
+      const changeItem = Array.from(document.querySelectorAll("button.mat-mdc-menu-item"))
         .find(b => /change game store/i.test(b.textContent));
       if (!changeItem) {
         console.error(`[GFN] ❌ “Change game store” menu missing`);
@@ -206,7 +206,7 @@ let gfn = {
 
       // ➌ click “Epic Games Store” in the submenu
       await new Promise(r => setTimeout(r, 300));
-      const epicOption = Array.from(document.querySelectorAll("button.mat-menu-item"))
+      const epicOption = Array.from(document.querySelectorAll("button.mat-mdc-menu-item"))
         .find(b => /epic games store/i.test(b.textContent));
       if (!epicOption) {
         console.error(`[GFN] ❌ Epic entry missing in store list`);
