@@ -185,8 +185,14 @@ let gfn = {
     // 2. Switch Store if needed
     if (epicChipEl) {
         console.log(`[GFN] ▶️ Found Epic chip. Ensuring it is selected...`);
-        epicChipEl.click();
-        await new Promise(r => setTimeout(r, 2000)); 
+        // get the actual chips inside the parent, in case it has multiple stores listed
+        const actualChips = Array.from(epicChipEl.querySelectorAll('mat-chip'));
+        // Find the one that actually says "Epic" to click else fallback to previous logic 
+        const exactTarget = actualChips.find(c => /epic/i.test(c.textContent)) || epicChipEl;
+        
+        // Click the true target
+        exactTarget.click();
+        await new Promise(r => setTimeout(r, 3500)); 
     } else if (moreBtn) {
         console.warn(`[GFN] ⚠ Switching store via ⋮ menu...`);
         moreBtn.click();
