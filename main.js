@@ -1,7 +1,12 @@
 let gameTitles = ['Evil Dead: The Game']; // ← fill this with your list of game titles
 
-let SEARCH_DELAY  = 4000;
-let CONFIRM_DELAY = 4000;
+const DEFAULT_ACTION_DELAY_MS = 4000;
+const SEARCH_DELAY_MS = DEFAULT_ACTION_DELAY_MS;
+const CONFIRM_DELAY_MS = DEFAULT_ACTION_DELAY_MS;
+const PANEL_POLL_INTERVAL_MS = 500;
+const EPIC_CHIP_SWITCH_DELAY_MS = 3500;
+const MENU_OPEN_DELAY_MS = 1000;
+const STORE_SWITCH_SETTLE_DELAY_MS = 2000;
 
 let stopFlag = false;
 
@@ -98,7 +103,7 @@ let gfn = {
     this.searchInput.dispatchEvent(new Event("change", { bubbles: true }));
     this.searchInput.click();
 
-    setTimeout(() => this.openFirstTile(title), SEARCH_DELAY);
+    setTimeout(() => this.openFirstTile(title), SEARCH_DELAY_MS);
   },
 
   openFirstTile(title) {
@@ -173,7 +178,7 @@ let gfn = {
                   possibleElements.find(b => ["⋮", "MORE", "ACTIONS"].some(k => (b.innerText || b.textContent).toUpperCase().includes(k)) && isVisible(b));
         
         if (epicChipEl || moreBtn) break;
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, PANEL_POLL_INTERVAL_MS));
     }
 
     if (!epicChipEl && !moreBtn) {
@@ -192,11 +197,11 @@ let gfn = {
         
         // Click the true target
         exactTarget.click();
-        await new Promise(r => setTimeout(r, 3500)); 
+        await new Promise(r => setTimeout(r, EPIC_CHIP_SWITCH_DELAY_MS)); 
     } else if (moreBtn) {
         console.warn(`[GFN] ⚠ Switching store via ⋮ menu...`);
         moreBtn.click();
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, MENU_OPEN_DELAY_MS));
         
         let menus = Array.from(document.querySelectorAll("button, mat-mdc-menu-item, [role='menuitem'], span"));
         
@@ -208,7 +213,7 @@ let gfn = {
              const clickable = epicOption.closest('button, [role="menuitem"]') || epicOption;
              clickable.click();
              console.log(`[GFN] ▶️ Switched "${title}" to Epic Store directly`);
-             await new Promise(r => setTimeout(r, 2000));
+             await new Promise(r => setTimeout(r, STORE_SWITCH_SETTLE_DELAY_MS));
         } else {
              // Scenario B: We have to click "Change game store" first
              const changeItem = menus.find(b => /(change|switch).*(store|platform)/i.test((b.innerText || b.textContent)) && isVisible(b));
@@ -216,7 +221,7 @@ let gfn = {
              if (changeItem) {
                  const clickableChange = changeItem.closest('button, [role="menuitem"]') || changeItem;
                  clickableChange.click();
-                 await new Promise(r => setTimeout(r, 1000));
+                 await new Promise(r => setTimeout(r, MENU_OPEN_DELAY_MS));
                  
                  // Re-query the DOM for the new submenu
                  menus = Array.from(document.querySelectorAll("button, mat-mdc-menu-item, [role='menuitem'], span"));
@@ -226,7 +231,7 @@ let gfn = {
                      const clickableEpic = epicOption.closest('button, [role="menuitem"]') || epicOption;
                      clickableEpic.click();
                      console.log(`[GFN] ▶️ Switched "${title}" to Epic Store via submenu`);
-                     await new Promise(r => setTimeout(r, 2000));
+                     await new Promise(r => setTimeout(r, STORE_SWITCH_SETTLE_DELAY_MS));
                  } else {
                      console.error(`[GFN] ❌ Epic entry missing in sub-menu list`);
                      skippedGames.push(title);
@@ -253,7 +258,7 @@ let gfn = {
             return ["MARK AS OWNED", "GET", "+ MARK AS OWNED", "ADD TO LIBRARY"].some(k => text.includes(k));
         });
         if (addBtn) break;
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, PANEL_POLL_INTERVAL_MS));
     }
 
     if (!addBtn) {
@@ -284,7 +289,7 @@ let gfn = {
             return ["YES", "CONFIRM", "CONTINUE"].some(k => text.includes(k));
         });
         if(confirmBtn) break;
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, PANEL_POLL_INTERVAL_MS));
     }
     
     if (confirmBtn) {
@@ -296,7 +301,7 @@ let gfn = {
       skippedGames.push(title);
     }
     
-    setTimeout(() => this.searchNext(), CONFIRM_DELAY);
+    setTimeout(() => this.searchNext(), CONFIRM_DELAY_MS);
   },
 
   reportSummary() {
